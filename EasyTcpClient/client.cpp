@@ -5,6 +5,13 @@
 #include<Windows.h>
 
 
+struct DataPackage
+{
+	int age;
+	char name[32];
+
+};
+
 int main()
 {
 	WORD ver = MAKEWORD(2, 2);
@@ -26,7 +33,7 @@ int main()
 	sockaddr_in sin = {};
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(4567);
-	sin.sin_addr.S_un.S_addr = inet_addr("192.168.1.10");
+	sin.sin_addr.S_un.S_addr = inet_addr("192.168.3.3");
 	int ret = connect(sock, (sockaddr*)& sin, sizeof(sin));
 	if (SOCKET_ERROR == ret)
 	{
@@ -61,7 +68,8 @@ int main()
 		int nLen = recv(sock, recvBuf, 256, 0);
 		if (nLen > 0)
 		{
-			std::cout << "接收到数据:" << recvBuf << std::endl;
+			DataPackage* dp = (DataPackage *)recvBuf;
+			std::cout << "接收到数据  名字:" << dp->name  << "    年龄:"  << dp->age << std::endl;
 		}
 
 	}

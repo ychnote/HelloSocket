@@ -4,6 +4,13 @@
 #include<WinSock2.h>
 #include<Windows.h>
 
+struct DataPackage
+{
+	int age;
+	char name[32];
+
+};
+
 int main()
 {
 	WORD ver = MAKEWORD(2, 2);
@@ -61,15 +68,10 @@ int main()
 		std::cout << "收到命令:" << recvBuf << std::endl;
 		
 		//6.处理请求
-		if (0 == strcmp(recvBuf, "getName"))
+		if (0 == strcmp(recvBuf, "getInfo"))
 		{
-			char msgBuf[] = "Hello, I'm Server";
-			send(cSock, msgBuf, strlen(msgBuf) + 1, 0);
-		}
-		else if (0 == strcmp(recvBuf, "getAge"))
-		{
-			char msgBuf[] = "18岁";
-			send(cSock, msgBuf, sizeof(msgBuf) + 1, 0);
+			DataPackage dp = {80, "张国荣"};
+			send(cSock, (const char *)&dp, sizeof(DataPackage), 0);
 		}
 		else 
 		{
