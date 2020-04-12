@@ -5,12 +5,41 @@
 #include<Windows.h>
 
 
-struct DataPackage
+enum CMD
 {
-	int age;
-	char name[32];
+	CMD_LOGIN,
+	CMD_LOGOUT,
+	CMD_ERROR
+};
+
+struct DataHeader
+{
+	short dataLenght;
+	short cmd;
+};
+
+struct Login
+{
+	char userName[32];
+	char password[32];
 
 };
+
+struct LoginResult
+{
+	int result;
+};
+
+struct LogOut
+{
+	char usrName[32];
+};
+
+struct LogOutResult
+{
+	int result;
+};
+
 
 int main()
 {
@@ -57,20 +86,64 @@ int main()
 			std::cout << "收到退出命令" << std::endl;
 			break;
 		}
-		else
+		else if(0 == strcmp(cmdBuf, "Login"))
 		{
-			//5.向服务器发送请求命令 
-			send(sock, cmdBuf, sizeof(cmdBuf) + 1, 0);
+			char userName[32] = {};
+			char password[32] = {};
+			std::cout << "请输入用户名:" << std::endl;
+			std::cin >> userName;
+			std::cout << "请输入密:" << std::endl;
+			std::cin >> password;
+			DataHeader header = {};
+			header.cmd = CMD_LOGIN;
+			header.dataLenght = sizeof(Login);
+			send(sock, (const char *)&header, sizeof(DataHeader), 0);
+			Login log = {};
+			strcpy_s(log.userName, userName);
+			strcpy_s(log.password, password);
+			send(sock, (const char*)&log, sizeof(Login), 0);
+
+			recv(sock, (char*)&header, sizeof(DataHeader), 0);
+
+			LoginResult result = {};
+			recv(sock, (char *)&result, sizeof(LoginResult), 0);
+			if (result.result == 0)
+			{
+				std::cout << "登录成功" << std::endl;
+				std::cin >> cmdBuf;
+				if (0 == strcmp(cmdBuf, "LogOut")) 
+				{
+					header.cmd = CMD_LOGOUT;
+					header.dataLenght = sizeof(LogOut);
+					send(sock, (const char *)&header, sizeof(DataHeader), 0);
+					LogOut out = {};
+					strcpy_s(out.usrName, userName);
+					send(sock, (const char *) &out, sizeof(LogOut), 0);
+					
+					recv(sock, (char *) &header, sizeof(DataHeader), 0);
+					LogOutResult logOutResult = {};
+					recv(sock, (char *)&logOutResult, sizeof(LogOutResult), 0);
+					if (0 == logOutResult.result)
+					{
+						std::cout << "userName:" << userName << "登出成功" << std::endl;
+					}
+					else 
+					{
+						std::cout << "登出失败" << std::endl;
+					}
+				}
+			}
+			else 
+			{
+				std::cout << "登录失败" << std::endl;
+			}
+
+
+
 		}
 
 		//6.接收服务器信息recv
-		char recvBuf[256] = {};
-		int nLen = recv(sock, recvBuf, 256, 0);
-		if (nLen > 0)
-		{
-			DataPackage* dp = (DataPackage *)recvBuf;
-			std::cout << "接收到数据  名字:" << dp->name  << "    年龄:"  << dp->age << std::endl;
-		}
+	
 
 	}
 

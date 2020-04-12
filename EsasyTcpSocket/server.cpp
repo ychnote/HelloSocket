@@ -4,12 +4,43 @@
 #include<WinSock2.h>
 #include<Windows.h>
 
-struct DataPackage
+
+enum CMD
 {
-	int age;
-	char name[32];
+	CMD_LOGIN, 
+	CMD_LOGOUT,
+	CMD_ERROR
+};
+
+struct DataHeader
+{
+	short dataLenght; 
+	short cmd;
+};
+
+struct Login
+{
+	char userName[32];
+	char password[32];
 
 };
+
+struct LoginResult
+{
+	int result;
+};
+
+struct LogOut
+{
+	char usrName[32];
+};
+
+struct LogOutResult
+{
+	int result;
+};
+
+
 
 int main()
 {
@@ -54,30 +85,56 @@ int main()
 	}
 	std::cout << "新客户端加入：IP = " << inet_ntoa(clientAddr.sin_addr) << std::endl;
 
-	char recvBuf[128] = {};
 	while (true)
 	{
 	
 		//5.接受客户端数据
-		int  nLen = recv(cSock, recvBuf, 128, 0);
-		if (nLen <= 0)
+		DataHeader head{ 0 };
+		recv(cSock, (char*)& head, sizeof(DataHeader), 0);
+		switch (head.cmd)
 		{
-			std::cout << "客户端已经退出，任务结束" << std::endl;
+		case CMD_LOGIN:
+		{
+		
+			Login login = {};
+			recv(cSock, (char*)& login, sizeof(Login), 0);
+			std::cout << "登陆操作"  << "用户名:" << login.userName << "密码:" << login.password << std::endl;
+			LoginResult loginResult = { 0 };
+			if ( 0 == strcmp(login.userName, "caihui") && 0 == strcmp(login.password, "123456"))
+			{
+				std::cout << "登录成功" << std::endl;
+				loginResult.result = 0;
+			}
+			else
+			{
+				std::cout << "登录失败" << std::endl;
+				loginResult.result = -1;
+			}
+			send(cSock, (char *)&head, sizeof(DataHeader), 0);
+			send(cSock, (char*)& loginResult, sizeof(LoginResult), 0);
 			break;
 		}
-		std::cout << "收到命令:" << recvBuf << std::endl;
+		case CMD_LOGOUT:
+		{
+			LogOut logOut = {};
+			recv(cSock, (char*)& logOut, sizeof(LogOut), 0);
+			LogOutResult logOutResult = { 0 };
+			send(cSock, (const char*)& head, sizeof(DataHeader), 0);
+			send(cSock, (const char*)&logOutResult , sizeof(LogOutResult), 0);
+			break;
+		}
+
+		default:
+		{
+			head.cmd = CMD_ERROR;
+			head.dataLenght = 0;
+			send(cSock, (const char *)&head, sizeof(DataHeader), 0);
+			break;
+		}
+		}
+		 
 		
 		//6.处理请求
-		if (0 == strcmp(recvBuf, "getInfo"))
-		{
-			DataPackage dp = {80, "张国荣"};
-			send(cSock, (const char *)&dp, sizeof(DataPackage), 0);
-		}
-		else 
-		{
-			char msgBuff[] = "??????";
-			send(cSock, msgBuff, sizeof(msgBuff) + 1, 0);
-		}
 		
 	}
 	//7. 关闭套接字closesocket
