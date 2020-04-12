@@ -8,7 +8,9 @@
 enum CMD
 {
 	CMD_LOGIN,
+	CMD_LOGIN_RESULT,
 	CMD_LOGOUT,
+	CMD_LOGOUT_RESULT,
 	CMD_ERROR
 };
 
@@ -18,27 +20,50 @@ struct DataHeader
 	short cmd;
 };
 
-struct Login
+struct Login : public DataHeader
 {
+	Login()
+	{
+		dataLenght = sizeof(Login);
+		cmd = CMD_LOGIN;
+	}
 	char userName[32];
 	char password[32];
 
 };
 
-struct LoginResult
+struct LoginResult : public DataHeader
 {
+	LoginResult()
+	{
+		dataLenght = sizeof(LoginResult);
+		cmd = CMD_LOGIN_RESULT;
+		result = 0;
+	}
 	int result;
 };
 
-struct LogOut
+struct LogOut : public DataHeader
 {
+	LogOut()
+	{
+		dataLenght = sizeof(LogOut);
+		cmd = CMD_LOGOUT;
+	}
 	char usrName[32];
 };
 
-struct LogOutResult
+struct LogOutResult : public DataHeader
 {
+	LogOutResult()
+	{
+		dataLenght = sizeof(LogOutResult);
+		cmd = CMD_LOGOUT_RESULT;
+		result = 0;
+	}
 	int result;
 };
+
 
 
 int main()
@@ -93,17 +118,11 @@ int main()
 			std::cout << "请输入用户名:" << std::endl;
 			std::cin >> userName;
 			std::cout << "请输入密:" << std::endl;
-			std::cin >> password;
-			DataHeader header = {};
-			header.cmd = CMD_LOGIN;
-			header.dataLenght = sizeof(Login);
-			send(sock, (const char *)&header, sizeof(DataHeader), 0);
+			std::cin >> password;;
 			Login log = {};
 			strcpy_s(log.userName, userName);
 			strcpy_s(log.password, password);
 			send(sock, (const char*)&log, sizeof(Login), 0);
-
-			recv(sock, (char*)&header, sizeof(DataHeader), 0);
 
 			LoginResult result = {};
 			recv(sock, (char *)&result, sizeof(LoginResult), 0);
@@ -113,14 +132,9 @@ int main()
 				std::cin >> cmdBuf;
 				if (0 == strcmp(cmdBuf, "LogOut")) 
 				{
-					header.cmd = CMD_LOGOUT;
-					header.dataLenght = sizeof(LogOut);
-					send(sock, (const char *)&header, sizeof(DataHeader), 0);
 					LogOut out = {};
 					strcpy_s(out.usrName, userName);
 					send(sock, (const char *) &out, sizeof(LogOut), 0);
-					
-					recv(sock, (char *) &header, sizeof(DataHeader), 0);
 					LogOutResult logOutResult = {};
 					recv(sock, (char *)&logOutResult, sizeof(LogOutResult), 0);
 					if (0 == logOutResult.result)
