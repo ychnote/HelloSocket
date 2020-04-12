@@ -113,18 +113,20 @@ int main()
 	{
 	
 		//5.接受客户端数据
-		DataHeader head{ };
-		recv(cSock, (char*)& head, sizeof(DataHeader), 0);
-		switch (head.cmd)
+		
+		char szRecv[1024] = {};
+		recv(cSock, szRecv, sizeof(DataHeader), 0);
+		DataHeader * head = (DataHeader*)szRecv;
+		switch (head->cmd)
 		{
 		case CMD_LOGIN:
 		{
 		
-			Login login = {};
-			recv(cSock, (char*)& login + sizeof(DataHeader), sizeof(Login) - sizeof(DataHeader), 0);
-			std::cout << "登陆操作"  << "用户名:" << login.userName << "密码:" << login.password << "命令:" << login.cmd << "数据长度:"  << login.dataLenght << std::endl;
+			recv(cSock, szRecv + sizeof(DataHeader), head->dataLenght - sizeof(DataHeader), 0);
+			Login* login = (Login*)szRecv;
+			std::cout << "登陆操作"  << "用户名:" << login->userName << "密码:" << login->password << "命令:" << login->cmd << "数据长度:"  << login->dataLenght << std::endl;
 			LoginResult loginResult = { };
-			if ( 0 == strcmp(login.userName, "caihui") && 0 == strcmp(login.password, "123456"))
+			if ( 0 == strcmp(login->userName, "caihui") && 0 == strcmp(login->password, "123456"))
 			{
 				std::cout << "登录成功" << std::endl;
 				loginResult.result = 0;
@@ -139,9 +141,10 @@ int main()
 		}
 		case CMD_LOGOUT:
 		{
-			LogOut logOut = {};
-			recv(cSock, (char*)& logOut + sizeof(DataHeader), sizeof(LogOut) - sizeof(DataHeader), 0);
-			std::cout << "登出操作" << "用户名:" << logOut.usrName << "命令:" << logOut.cmd << "数据长度:" << logOut.dataLenght << std::endl;
+		
+			recv(cSock, szRecv + sizeof(DataHeader), head->dataLenght - sizeof(DataHeader), 0);
+			LogOut * logOut = (LogOut *)szRecv;
+			std::cout << "登出操作" << "用户名:" << logOut->usrName << "命令:" << logOut->cmd << "数据长度:" << logOut->dataLenght << std::endl;
 			LogOutResult logOutResult = { };
 			send(cSock, (const char*)&logOutResult , sizeof(LogOutResult), 0);
 			break;
@@ -149,8 +152,8 @@ int main()
 
 		default:
 		{
-			head.cmd = CMD_ERROR;
-			head.dataLenght = 0;
+			head->cmd = CMD_ERROR;
+			head->dataLenght = 0;
 			send(cSock, (const char *)&head, sizeof(DataHeader), 0);
 			break;
 		}
