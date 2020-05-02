@@ -193,7 +193,7 @@ int main()
 			FD_SET(g_clients[n], &fdRead);
 		}
 
-		timeval t = {0, 0};
+		timeval t = {1, 0};
 		int ret =  select(sock + 1, &fdRead, &fdWrite, &fdExp, &t);
 		if (ret < 0)
 		{

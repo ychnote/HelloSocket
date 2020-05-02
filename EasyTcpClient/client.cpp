@@ -4,6 +4,7 @@
 #include<WinSock2.h>
 #include<Windows.h>
 #include<thread>
+#include <cstdlib>
 
 
 using namespace std;
@@ -128,6 +129,40 @@ int processor(SOCKET sockt)
 
 }
 
+bool g_bRun = true;
+
+void cmdThread(SOCKET sock)
+{
+	while (true) {
+		char cmdBuf[256] = {};
+		cout << "请输出命令:";
+		cin >> cmdBuf;
+		if (0 == strcmp(cmdBuf, "exit"))
+		{
+			g_bRun = false;
+			cout << "退出" << endl;
+			return;
+		}
+		else if (0 == strcmp(cmdBuf, "login"))
+		{
+
+			Login login;
+			strcpy_s(login.userName, "caihui");
+			strcpy_s(login.password, "123456");
+			send(sock, (const char*)& login, sizeof(Login), 0);
+		}
+		else if (0 == strcmp(cmdBuf, "logout"))
+		{
+			LogOut logout;
+			strcpy_s(logout.usrName, "caihui");
+			send(sock, (const char*)& logout, sizeof(LogOut), 0);
+		}
+		else
+		{
+			cout << "不支持的命令" << endl;
+		}
+	}
+}
 
 int main()
 {
@@ -161,20 +196,21 @@ int main()
 		std::cout << "连接服务器成功" << std::endl;
 	}
 
+	//启动线程
+	thread t1(cmdThread, sock);
+	t1.detach();
 	
-	while (true)
+	while (g_bRun)
 	{
 		fd_set fdReads; 
 		FD_ZERO(&fdReads);
 		FD_SET(sock, &fdReads);
-		timeval t = {0, 0};
+		timeval t = {1, 0};
 		int ret = select(sock + 1, &fdReads, nullptr, nullptr, &t);
 		if (ret < 0)
 		{
 			printf("select 任务结束");
 		}
-
-		cout << "ret" << ret << endl;
 
 		if (FD_ISSET(sock, &fdReads))
 		{
@@ -185,12 +221,8 @@ int main()
 				break;
 			}
 		}
-		cout << "空闲时间处理其它业务" << endl;
-		Login login; 
-		strcpy_s(login.userName, "caihui");
-		strcpy_s(login.password, "123456");
-		send(sock, (const char *)&login, sizeof(Login), 0);
-		Sleep(1000);
+	//	cout << "空闲时间处理其它业务" << endl;
+		
 
 	}
 
