@@ -14,6 +14,7 @@ enum CMD
 	CMD_LOGIN_RESULT,
 	CMD_LOGOUT,
 	CMD_LOGOUT_RESULT,
+	CMD_NEW_USER_JOIN,
 	CMD_ERROR
 };
 
@@ -42,6 +43,19 @@ struct LoginResult : public DataHeader
 		dataLenght = sizeof(LoginResult);
 		cmd = CMD_LOGIN_RESULT;
 		result = 0;
+	}
+	int result;
+};
+
+struct NewUserJoin : public DataHeader
+{
+	int socket;
+	NewUserJoin()
+	{
+		dataLenght = sizeof(NewUserJoin);
+		cmd = CMD_NEW_USER_JOIN;
+		result = 0;
+		socket = 0;
 	}
 	int result;
 };
@@ -135,6 +149,7 @@ int main()
 	//-- 用socket api建立简易tcp服务器
 	//1. 建立一个socket 套接字
 	SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
 	//2. bind绑定用于接收客户度连接的网络端口
 	sockaddr_in _sin = {};
 	_sin.sin_family = AF_INET;
@@ -160,7 +175,6 @@ int main()
 		std::cout << "监听网络端口成功" << std::endl;
 	}
 
-
 	while (true)
 	{
 	
@@ -180,7 +194,7 @@ int main()
 		}
 
 		timeval t = {0, 0};
-		int ret =  select(sock + 1, &fdRead, &fdWrite, &fdRead, &t);
+		int ret =  select(sock + 1, &fdRead, &fdWrite, &fdExp, &t);
 		if (ret < 0)
 		{
 			std::cout << "select 任务结束" << std::endl;
@@ -200,6 +214,12 @@ int main()
 				std::cout << "错误，接收到无限客户端socket ..." << std::endl;
 			}
 			std::cout << "新客户端加入：IP = " << inet_ntoa(clientAddr.sin_addr) << std::endl;
+			for (int n = (int)g_clients.size() - 1; n >= 0; n--)
+			{
+				NewUserJoin newUser;
+				newUser.socket = g_clients[n];
+				send(g_clients[n], (const char*)& newUser, sizeof(NewUserJoin), 0);
+			}
 			g_clients.push_back(cSock);
 		}
 		//5.接受客户端数据
@@ -214,6 +234,7 @@ int main()
 			}
 		}
 	
+		cout << "空闲时间处理	其它业务" << endl;
 		
 		//6.处理请求
 		

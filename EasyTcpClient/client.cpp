@@ -3,7 +3,10 @@
 #include<iostream>
 #include<WinSock2.h>
 #include<Windows.h>
+#include<thread>
 
+
+using namespace std;
 
 enum CMD
 {
@@ -11,8 +14,10 @@ enum CMD
 	CMD_LOGIN_RESULT,
 	CMD_LOGOUT,
 	CMD_LOGOUT_RESULT,
+	CMD_NEW_USER_JOIN,
 	CMD_ERROR
 };
+
 
 struct DataHeader
 {
@@ -43,6 +48,19 @@ struct LoginResult : public DataHeader
 	int result;
 };
 
+struct NewUserJoin : public DataHeader
+{
+	int socket;
+	NewUserJoin()
+	{
+		dataLenght = sizeof(NewUserJoin);
+		cmd = CMD_NEW_USER_JOIN;
+		result = 0;
+		socket = 0;
+	}
+	int result;
+};
+
 struct LogOut : public DataHeader
 {
 	LogOut()
@@ -64,6 +82,51 @@ struct LogOutResult : public DataHeader
 	int result;
 };
 
+int processor(SOCKET sockt)
+{
+	char szRecv[1024] = {};
+	int nLen = recv(sockt, szRecv, sizeof(DataHeader), 0);
+	DataHeader* head = (DataHeader*)szRecv;
+
+	if (nLen <= 0)
+	{
+		cout << "与服务器断开连接， 任务结束 \n" << endl;
+		return -1;
+	}
+
+	switch (head->cmd)
+	{
+	case CMD_LOGIN_RESULT:
+	{
+		recv(sockt, szRecv + sizeof(DataHeader), head->dataLenght - sizeof(DataHeader), 0);
+		LoginResult* loginResult = (LoginResult *)szRecv;
+		cout << "收到服务器消息: CMD_LOGIN_RESULT: 数据长度:" << loginResult->dataLenght << " 结果：" << loginResult->result << endl;
+		break;
+	}
+	case CMD_LOGOUT_RESULT:
+	{
+		recv(sockt, szRecv + sizeof(DataHeader), head->dataLenght - sizeof(DataHeader), 0);
+		LogOutResult* logOutResult = (LogOutResult *)szRecv;
+		cout << "收到服务器消息：CMD_LOGOUT_RESULT: 数据长度：" << head->dataLenght << "结果：" << logOutResult->result << endl;
+		break;
+	}
+	case CMD_NEW_USER_JOIN:
+	{
+		recv(sockt, szRecv + sizeof(DataHeader), head->dataLenght - sizeof(DataHeader), 0 );
+		NewUserJoin* newUser = (NewUserJoin*)szRecv;
+		cout << "收到服务器消息: CMD_NEW_USER_JOIN  数据长度:" << head->dataLenght << "结果:" << newUser->result << endl;
+		break;
+	}
+	default:
+	{
+		//head->cmd = CMD_ERROR;
+		//head->dataLenght = 0;
+		//send(sockt, (const char*)& head, sizeof(DataHeader), 0);
+		break;
+	}
+	}
+
+}
 
 
 int main()
@@ -77,7 +140,7 @@ int main()
 	SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (INVALID_SOCKET == sock)
 	{
-		std::cout << "ERRPR，建立套接字失败" << std::endl;
+		std::cout << "ERRPR，建立套接字失败"  << std::endl;
 	}
 	else
 	{
@@ -101,63 +164,33 @@ int main()
 	
 	while (true)
 	{
-		//3.输入请求命令
-		char cmdBuf[128] = {};
-		std::cin >> cmdBuf;
-
-		//4.处理请求命令
-		if (0 == strcmp(cmdBuf, "exit"))
+		fd_set fdReads; 
+		FD_ZERO(&fdReads);
+		FD_SET(sock, &fdReads);
+		timeval t = {0, 0};
+		int ret = select(sock + 1, &fdReads, nullptr, nullptr, &t);
+		if (ret < 0)
 		{
-			std::cout << "收到退出命令" << std::endl;
-			break;
-		}
-		else if(0 == strcmp(cmdBuf, "Login"))
-		{
-			char userName[32] = {};
-			char password[32] = {};
-			std::cout << "请输入用户名:" << std::endl;
-			std::cin >> userName;
-			std::cout << "请输入密:" << std::endl;
-			std::cin >> password;;
-			Login log = {};
-			strcpy_s(log.userName, userName);
-			strcpy_s(log.password, password);
-			send(sock, (const char*)&log, sizeof(Login), 0);
-
-			LoginResult result = {};
-			recv(sock, (char *)&result, sizeof(LoginResult), 0);
-			if (result.result == 0)
-			{
-				std::cout << "登录成功" << std::endl;
-				std::cin >> cmdBuf;
-				if (0 == strcmp(cmdBuf, "LogOut")) 
-				{
-					LogOut out = {};
-					strcpy_s(out.usrName, userName);
-					send(sock, (const char *) &out, sizeof(LogOut), 0);
-					LogOutResult logOutResult = {};
-					recv(sock, (char *)&logOutResult, sizeof(LogOutResult), 0);
-					if (0 == logOutResult.result)
-					{
-						std::cout << "userName:" << userName << "登出成功" << std::endl;
-					}
-					else 
-					{
-						std::cout << "登出失败" << std::endl;
-					}
-				}
-			}
-			else 
-			{
-				std::cout << "登录失败" << std::endl;
-			}
-
-
-
+			printf("select 任务结束");
 		}
 
-		//6.接收服务器信息recv
-	
+		cout << "ret" << ret << endl;
+
+		if (FD_ISSET(sock, &fdReads))
+		{
+			FD_CLR(sock, &fdReads);
+			if (-1 == processor(sock))
+			{
+				cout << "select 任务结束" << endl;
+				break;
+			}
+		}
+		cout << "空闲时间处理其它业务" << endl;
+		Login login; 
+		strcpy_s(login.userName, "caihui");
+		strcpy_s(login.password, "123456");
+		send(sock, (const char *)&login, sizeof(Login), 0);
+		Sleep(1000);
 
 	}
 
