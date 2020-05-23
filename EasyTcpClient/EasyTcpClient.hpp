@@ -145,25 +145,57 @@ public:
 		return false;
 	}
 
+	//缓冲区最小单元大小
+constexpr static int RECV_BUFFER_SIZE =  10240;;
+
+// 接受缓冲区
+	char _szRecv[RECV_BUFFER_SIZE] = {};
+	
+
+	//第二缓冲区消息缓冲区 
+	char _szMsgBuf[RECV_BUFFER_SIZE * 10] = {}; 
+
+	int _lastPos = 0;
+
 	//接收数据
 	int recvData(SOCKET sockt)
 	{
-		char szRecv[1024] = {};
-		int nLen = recv(sockt, szRecv, sizeof(DataHeader), 0);
-		DataHeader* head = (DataHeader*)szRecv;
-
+		int nLen = recv(sockt, _szRecv, sizeof(DataHeader), 0);
 		if (nLen <= 0)
 		{
 			cout << "与服务器断开连接， 任务结束 \n" << endl;
 			return -1;
 		}
 
-		recv(sockt, szRecv + sizeof(DataHeader), head->dataLenght - sizeof(DataHeader), 0);
+		//将收取的数据拷贝到消息缓冲区
+		memcpy(_szMsgBuf + _lastPos, _szRecv, nLen);
+		//消息缓冲区的数据尾部位置后移
+		_lastPos += nLen;
 
-		onNetMsg(head);
-
-		
-
+		//判断小消息缓冲区的长度大于消息头DataHeader的长度
+		//这时就可以知道当前消息的长度 
+		while (_lastPos > sizeof(DataHeader))
+		{
+			//这时就可以知道当前消息的长度
+			DataHeader* header = (DataHeader*)_szMsgBuf;
+			//判断消息缓冲区的数据长度大于消息长度
+			if (_lastPos > header->dataLenght)
+			{
+				//剩余未处理消息缓冲区的长度 
+				int nSize = _lastPos - header->dataLenght;
+				//处理网络数据
+				onNetMsg(header);
+				//将消息缓冲区剩余未处理的数据前移
+				memcpy(_szMsgBuf, _szMsgBuf + header->dataLenght, nSize);
+				//消息缓冲区的数据尾部位置前移
+				_lastPos = nSize;
+			}
+			else
+			{
+				//剩余数据不够一条完整的消息
+				break;
+			}
+		}
 	}
 	
 	//响应网络数据
@@ -191,11 +223,17 @@ public:
 			cout << "收到服务器消息: CMD_NEW_USER_JOIN  数据长度:" << header->dataLenght << "结果:" << newUser->result << endl;
 			break;
 		}
+		case CMD_ERROR:
+		{
+			cout << "接受到错误消息" << endl;
+			break;
+		}
 		default:
 		{
 			//head->cmd = CMD_ERROR;
 			//head->dataLenght = 0;
 			//send(sockt, (const char*)& head, sizeof(DataHeader), 0);
+			cout << "无效命令 " << endl;
 			break;
 		}
 		}
