@@ -10,11 +10,53 @@
 
 
 using namespace std;
+
+//缓冲区最小单元大小
+constexpr static int RECV_BUFFER_SIZE = 10240;;
+class ClientSocket
+{
+public:
+	ClientSocket(SOCKET sockfd = INVALID_SOCKET)
+	{
+		_sockfd = sockfd;
+		memset(_szMsgBuf, 0, sizeof(_szMsgBuf));
+		_lastPos = 0;
+	}
+
+	SOCKET sockfd()
+	{
+		return _sockfd;
+	}
+
+	char* msgBuf()
+	{
+		return _szMsgBuf;
+	}
+
+	int getLastPos()
+	{
+		return _lastPos;
+	}
+
+	void setLastPos(int lastPos)
+	{
+		_lastPos = lastPos;
+	}
+
+private:
+	SOCKET _sockfd;  
+	//第二缓冲区消息缓冲区 
+	char _szMsgBuf[RECV_BUFFER_SIZE * 10];
+	int _lastPos;
+};
+
+
+
 class EasyTcpServer
 {
 private:
 	SOCKET _sock;
-	vector<SOCKET> g_clients;
+	vector<ClientSocket *> g_clients;
 	
 public:
 	
@@ -108,10 +150,10 @@ public:
 			for (int n = (int)g_clients.size() - 1; n >= 0; n--)
 			{
 				NewUserJoin newUser;
-				newUser.socket = g_clients[n];
-				send(g_clients[n], (const char*)&newUser, sizeof(NewUserJoin), 0);
+				newUser.socket = _cScok;
+				send(g_clients[n]->sockfd(), (const char*)&newUser, sizeof(NewUserJoin), 0);
 			}
-			g_clients.push_back(_cScok);
+			g_clients.push_back(new ClientSocket(_cScok));
 		}
 		return _cScok;
 	}
@@ -126,8 +168,10 @@ public:
 		}
 		for (int n = (int)g_clients.size() - 1; n >= 0; n--)
 		{
-			closesocket(g_clients[n]);
+			closesocket(g_clients[n]->sockfd());
+			delete g_clients[n];
 		}
+		g_clients.clear();
 
 	}
 
@@ -147,7 +191,7 @@ public:
 
 			for (int n = (int)g_clients.size() - 1; n >= 0; n--)
 			{
-				FD_SET(g_clients[n], &fdRead);
+				FD_SET(g_clients[n]->sockfd(), &fdRead);
 			}
 
 			timeval t = { 1, 0 };
@@ -162,29 +206,22 @@ public:
 			if (FD_ISSET(_sock, &fdRead))
 			{
 				FD_CLR(_sock, &fdRead);
-				//4. accept等待接收客户端连接
-				sockaddr_in clientAddr = {};
-				int nAddrLen = sizeof(sockaddr_in);
-				SOCKET cSock = INVALID_SOCKET;
-				cSock = accept(_sock, (sockaddr*)& clientAddr, &nAddrLen);
-				if (INVALID_SOCKET == cSock)
-				{
-					std::cout << "错误，接收到无限客户端socket ..." << std::endl;
-				}
-				std::cout << "新客户端加入：IP = " << inet_ntoa(clientAddr.sin_addr) << std::endl;
-				NewUserJoin newUser;
-				newUser.socket = cSock;
-				sendDataAll(&newUser);
-				g_clients.push_back(cSock);
+				//4. accept等待接收客户端连
+				accepts();
 			}
 			//5.接受客户端数据
-			for (size_t n = 0; n < fdRead.fd_count; n++)
+			for (int n = (int)g_clients.size() - 1; n >= 0; n--)
 			{
-				if (-1 == RecvData(fdRead.fd_array[n]))
+				if (FD_ISSET(g_clients[n]->sockfd(), &fdRead))
 				{
-					auto iter = find(g_clients.begin(), g_clients.end(), fdRead.fd_array[n]);
-					if (iter != g_clients.end()) {
-						g_clients.erase(iter);
+					if (-1 == RecvData(g_clients[n]))
+					{
+						auto iter = g_clients.begin() + n;;
+						if (iter != g_clients.end())
+						{
+							delete* iter;
+							g_clients.erase(iter);
+						}
 					}
 				}
 			}
@@ -203,20 +240,40 @@ public:
 	}
 	//接收数据处理 处理粘包  拆分包 
 
-	int RecvData(SOCKET sockt)
+	int RecvData(ClientSocket* pClient)
 	{
 		char szRecv[1024] = {};
-		int nLen = recv(sockt, szRecv, sizeof(DataHeader), 0);
-		DataHeader* head = (DataHeader*)szRecv;
-
+		int nLen = recv(pClient->sockfd() , szRecv, sizeof(DataHeader), 0);
 		if (nLen <= 0)
 		{
 			cout << "客户端已退出，任务结束" << endl;
 			return -1;
 		}
 
-		recv(sockt, szRecv + sizeof(DataHeader), head->dataLenght - sizeof(DataHeader), 0);
-		onNetMsg(sockt, head);
+		//将收取的消息拷贝到消息缓冲区
+		memcpy(pClient->msgBuf() + pClient->getLastPos(), szRecv, nLen);
+	   //消息缓冲区的数据尾部位置后移
+		pClient->setLastPos(pClient->getLastPos() + nLen);
+
+		//判断消息缓冲区的数据长度大于消息头DataHeader 长度
+		while (pClient->getLastPos() >= sizeof(DataHeader))
+		{
+			//这时就可以知道当前消息的长度
+			DataHeader* header = (DataHeader*)pClient->msgBuf();
+			//判断消息缓冲区的数据长度大于消息长度
+			if (pClient->getLastPos() >= header->dataLenght)
+			{
+				//消息缓冲区剩余产未处理数据的长度
+				int nSize = pClient->getLastPos() - header->dataLenght;
+				onNetMsg(pClient->sockfd(), header);
+				memcpy(pClient->msgBuf(), pClient->msgBuf() + header->dataLenght, nSize);
+				pClient->setLastPos(nSize);
+			}
+			else
+			{
+				break;
+			}
+		}
 
 		return 0;
 
@@ -282,7 +339,7 @@ public:
 		{
 			for (int n = (int)g_clients.size() - 1; n >= 0; n--)
 			{
-				send(g_clients[n], (const char*)& header, header->dataLenght, 0);
+				send(g_clients[n]->sockfd(), (const char*)& header, header->dataLenght, 0);
 			}
 		}
 	}
